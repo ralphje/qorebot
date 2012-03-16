@@ -2,6 +2,8 @@ package qorebot;
 
 import qorebot.plugins.Plugin;
 import qorebot.plugins.PluginLoader;
+import qorebot.plugins.Pluginable;
+
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -63,13 +65,9 @@ public class QoreBot extends PircBot {
         this.server = server;
         this.nick = nick;
         try {
-            int iteration = 0;
             if (!this.isConnected()) {
-                iteration++;
                 this.setName(nick);
-                this.connect(server); // @throws NickAlreadyInUseException
-                                      // @throws IOException
-                                      // @throws IrcException
+                this.connect(server);
             }
             return true;
         } catch (NickAlreadyInUseException ex) {
@@ -86,6 +84,12 @@ public class QoreBot extends PircBot {
             return false;
         }
     }
+    
+    
+    // -------------------------------------------------------------------------
+    // Channel methods
+    // -------------------------------------------------------------------------
+    
 
     /**
      * Retrieves all channels the bot is aware of. Note this method is inproperly
@@ -93,7 +97,7 @@ public class QoreBot extends PircBot {
      *
      * @return A set of all channels
      */
-    public Set<Channel> getChannel() {
+    public Set<Channel> getChannelSet() {
         return this.channels;
     }
 
@@ -123,6 +127,37 @@ public class QoreBot extends PircBot {
 
         return false;
     }
+    
+
+    /**
+     * Loads all channels from the database into Channels and connects to them
+     * if the autojoin setting is set.
+     */
+    protected void loadChannels() {
+        Statement st = Database.gs();
+        if (st == null)
+            return;
+
+        try {
+            ResultSet result = st.executeQuery("SELECT id,name,autojoin,`key` FROM channels");
+            while (result.next()) {
+                Channel ch = new Channel(this, result.getInt("id"),
+                        result.getString("name"), result.getString("key"));
+                this.channels.add(ch);
+                if (result.getBoolean("autojoin"))
+                  ch.join();
+            }
+        } catch (SQLException ex) {
+            Logger.getLogger(QoreBot.class.getName()).log(Level.SEVERE,
+                    "Failed to retrieve channel list.", ex);
+        } finally {
+            try { if (st != null) st.close(); } catch (SQLException ex1) {   }
+        }
+    }
+    
+    // -------------------------------------------------------------------------
+    // User methods
+    // -------------------------------------------------------------------------
 
     /**
      * Alias for this.getUser(User.createUniqueId(nick, login, hostname))
@@ -188,6 +223,10 @@ public class QoreBot extends PircBot {
         return this.users;
     }
     
+    // -------------------------------------------------------------------------
+    // Plugin methods
+    // -------------------------------------------------------------------------
+    
     /**
      * Retrieves the Plugin for a given plugin name. Returns null if not found.
      * @param plugin The plugin name
@@ -207,31 +246,6 @@ public class QoreBot extends PircBot {
         return this.plugins;
     }
 
-    /**
-     * Loads all channels from the database into Channels and connects to them
-     * if the autojoin setting is set.
-     */
-    protected void loadChannels() {
-        Statement st = Database.gs();
-        if (st == null)
-            return;
-
-        try {
-            ResultSet result = st.executeQuery("SELECT id,name,autojoin,`key` FROM channels");
-            while (result.next()) {
-                Channel ch = new Channel(this, result.getInt("id"),
-                        result.getString("name"), result.getString("key"));
-                this.channels.add(ch);
-                if (result.getBoolean("autojoin"))
-                  ch.join();
-            }
-        } catch (SQLException ex) {
-            Logger.getLogger(QoreBot.class.getName()).log(Level.SEVERE,
-                    "Failed to retrieve channel list.", ex);
-        } finally {
-            try { if (st != null) st.close(); } catch (SQLException ex1) {   }
-        }
-    }
 
     /**
      * Loads all plugins from the database.
@@ -271,7 +285,7 @@ public class QoreBot extends PircBot {
     public Plugin createPlugin(String name) {
         try {
             //Plugin plugin = (Plugin) Class.forName(name).newInstance();
-            Class cl = (new PluginLoader(QoreBot.class.getClassLoader())).loadClass(name);
+			Class<?> cl = (new PluginLoader(QoreBot.class.getClassLoader())).loadClass(name);
             if (cl != null) {
                 Object ob = cl.newInstance();
                 return (Plugin) ob;
@@ -337,20 +351,35 @@ public class QoreBot extends PircBot {
     }
     
     /**
-     * Registers all plugins for the given channel.
+     * Loads all plugins for the given Pluginable object (either a User or a 
+     * Channel). If the plugin should be registered, 
+     * {@link Pluginable#register(Plugin)} is called, otherwise, 
+     * {@link Pluginable#unregister(Plugin)} is called.
      * 
-     * @param channel
+     * @param pluginable The object for which plugins should be registered.
      */
-    public void registerPlugins(Channel channel) {
-        PreparedStatement st = Database.gps("SELECT plugin_id FROM plugins_channels " +
-                            "WHERE channel_id = ?");
+    public void registerPlugins(Pluginable pluginable) {
+    	
+    	// Prepare the SQL query
+    	PreparedStatement st = null;
+    	int id = 0;
+    	if (pluginable instanceof Channel) {
+	        st = Database.gps("SELECT plugin_id FROM plugins_channels WHERE channel_id = ?");
+	        id = ((Channel) pluginable).getId();
+    	} else if (pluginable instanceof User) {
+	        st = Database.gps("SELECT plugin_id FROM plugins_users WHERE user_id = ?");
+	        id = ((User) pluginable).getId();
+    	}
+	    
+    	// Check whether we have succeeded in the previous step
         if (st == null)
             return;
         
+        // Start listing all plugins
         HashSet<Integer> registerPlugins = new HashSet<Integer>();
         
         try {
-            st.setInt(1, channel.getId());
+            st.setInt(1, id);
             ResultSet result = st.executeQuery();
                 
             while (result.next()) {
@@ -358,70 +387,43 @@ public class QoreBot extends PircBot {
             }
         } catch (SQLException ex) {
             Logger.getLogger(QoreBot.class.getName()).log(Level.SEVERE,
-                    "Failed to retrieve plugins for channel", ex);
+                    "Failed to retrieve plugins for pluginable", ex);
         } finally {
             try { if (st != null) st.close(); } catch (SQLException ex1) {   }
         }
         
-        
+        // Now loop over all plugins and check whether they should be registered
         for (Plugin p : this.plugins) {
-            if (p.isAutoregisterChannels() || registerPlugins.contains(p.getId()))
-                channel.register(p);
+        	// If it's a channel, and autoregisterChannels is true
+        	//      or a user, and autoregisterUsers is true
+        	// or the plugin list contains this id
+        	// then register
+            if (((pluginable instanceof Channel && p.isAutoregisterChannels())
+            			|| (pluginable instanceof User && p.isAutoregisterUsers())
+            	    ) || registerPlugins.contains(p.getId()))
+            	pluginable.register(p);
+            else
+            	pluginable.unregister(p);
         }
     }
     
-    /**
-     * Registers all plugins for the given user.
-     * 
-     * @param user
-     */
-    public void registerPlugins(User user) {
-        HashSet<Integer> registerPlugins = new HashSet<Integer>();
-        if (user.isIdentified()) {
-            PreparedStatement st = Database.gps("SELECT plugin_id FROM plugins_users " +
-                                "WHERE user_id = ?");
-            if (st == null)
-                return;
-
-
-            try {
-                st.setInt(1, user.getId());
-                ResultSet result = st.executeQuery();
-
-                while (result.next()) {
-                    registerPlugins.add(result.getInt("plugin_id"));
-                }
-            } catch (SQLException ex) {
-                Logger.getLogger(QoreBot.class.getName()).log(Level.SEVERE,
-                        "Failed to retrieve plugins for user", ex);
-            } finally {
-                try { if (st != null) st.close(); } catch (SQLException ex1) {   }
-            }
-        }
-        
-        
-        for (Plugin p : this.plugins) {
-            if (p.isAutoregisterUsers() || registerPlugins.contains(p.getId()))
-                user.register(p);
-            else
-                user.unregister(p);
-        }
-    }
-
     /**
      * Registers a plugin to all channels and users it should register to.
      *
      * @param plugin The plugin to register
      */
     public void registerPlugin(Plugin plugin) {
+    	// If it's set to autoregister, register to all channels.
         if (plugin.isAutoregisterChannels()) {
             for (Channel c : this.channels)
                 c.register(plugin);
+        
+        // Otherwise, check for all channels in the database
         } else {
-            PreparedStatement st = Database.gps("SELECT channel_id FROM plugins_channels " +
-                            "WHERE plugin_id = ?");
+            PreparedStatement st = Database.gps("SELECT channel_id FROM plugins_channels WHERE plugin_id = ?");
             if (st == null)
                 return;
+            
             try {
                 st.setInt(1, plugin.getId());
                 ResultSet result = st.executeQuery();
@@ -442,12 +444,14 @@ public class QoreBot extends PircBot {
             }
         }
 
+        // Now for all users, check if we should autoregister at all users.
         if (plugin.isAutoregisterUsers()) {
             for (User u : this.users)
                 u.register(plugin);
+        
+        // Otherwise, we will check for all users in the database.
         } else {
-            PreparedStatement st = Database.gps("SELECT user_id FROM plugins_users " +
-                            "WHERE plugin_id = ?");
+            PreparedStatement st = Database.gps("SELECT user_id FROM plugins_users WHERE plugin_id = ?");
             if (st == null)
                 return;
             try {
@@ -472,12 +476,9 @@ public class QoreBot extends PircBot {
     }
 
 
-
-
-
-    ////////////////////////////////////////////////////////////////////////////
+    // -------------------------------------------------------------------------
     // Handles all bot calls
-    ////////////////////////////////////////////////////////////////////////////
+    // -------------------------------------------------------------------------
 
     @Override
     protected void onConnect() {
@@ -488,18 +489,17 @@ public class QoreBot extends PircBot {
      * Retries to connect ten times, with increasing delay (60s, 70s, 80s, ...)
      */
     @Override
-    @SuppressWarnings("SleepWhileHoldingLock")
     protected void onDisconnect() {
-	int retry = 0;
-	while (!this.isConnected() && retry < 10) {
-            try {
-		Thread.sleep(60000+retry*10000); // @throws InterruptedException
-		this.connect(this.server, this.nick);
-            } catch(InterruptedException e) {
-		// don't really care about this
-            }
-	}
-	retry++;
+		int retry = 0;
+		while (!this.isConnected() && retry < 10) {
+			try {
+				Thread.sleep(60000+retry*10000);
+				this.connect(this.server, this.nick);
+	        } catch(InterruptedException e) {
+	        	// don't really care about this
+	        }
+		}
+		retry++;
     }
 
     // Don't do anything

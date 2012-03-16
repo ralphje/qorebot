@@ -10,18 +10,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * A singleton class representing a database connection with a MySQL server.
+ * A singleton class representing a database connection with a SQL server.
  *
  * @author Ralph Broenink
  */
 public class Database {
-    private static final String DATABASE =
-            "jdbc:mysql://smiley.student.utwente.nl/qorebot" +
-            "?user=qorebot-user&password=bSbFUKjL6cezAcRS";
-
+	private String connectionUrl = null;
     private static Database instance = null;
     private Connection conn = null;
 
+    /**
+     * Creates a Database instance. Can only be used locally, since it's a 
+     * singleton.
+     */
     private Database() {
         try {
             Class.forName("com.mysql.jdbc.Driver");
@@ -148,6 +149,11 @@ public class Database {
             }
     }
 
+    /**
+     * Checks whether the current connection is active. Method may be expensive.
+     * 
+     * @return True if the connection is active. 
+     */
     private boolean isActiveConnection() {
         Statement s = null;
         ResultSet rs = null;
@@ -169,9 +175,14 @@ public class Database {
         }
     }
 
+    /**
+     * Creates a new connection to the database.
+     * 
+     * @return True if connection succeeded.
+     */
     private boolean createConnection() {
         try {
-            this.conn = DriverManager.getConnection(DATABASE);
+            this.conn = DriverManager.getConnection(this.getConnectionUrl());
             return true;
         } catch (SQLException ex) {
             Logger.getLogger(Database.class.getName()).log(Level.SEVERE,
@@ -179,5 +190,19 @@ public class Database {
             try { if (this.conn != null) this.conn.close(); } catch (SQLException exx) { }
         }
         return false;
+    }
+    
+    /**
+     * Returns the JDBC Url to the database.
+     */
+    private String getConnectionUrl() {
+    	if (this.connectionUrl == null) {
+    		this.connectionUrl = Config.getValueFromConfigFile("DATABASE_URL");
+    		if (this.connectionUrl == null) {
+    			Logger.getLogger(Database.class.getName()).log(Level.SEVERE,
+                        "Failed to retrieve DATABASE_URL setting from config file.");
+    		}
+    	}
+    	return this.connectionUrl;
     }
 }

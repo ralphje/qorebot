@@ -47,22 +47,7 @@ public abstract class Plugin {
      */
     public void setAutoregisterChannels(boolean autoregister) {
         this.autoregisterChannels = autoregister;
-
-        if (this.id > 0) {
-            PreparedStatement st = Database.gps("UPDATE plugins SET autoregister_channels = ? WHERE id = ?");
-            if (st == null)
-                return;
-            try {
-                st.setBoolean(1, autoregister);
-                st.setInt(2, this.id);
-                st.executeUpdate();
-            } catch (SQLException ex) {
-                Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
-                        "Failed to update autoregister setting", ex);
-            } finally {
-                try { if (st != null) st.close(); } catch (SQLException ex1) {   }
-            }
-        }
+        this.setAutoregister(autoregister, "autoregister_channels");
     }
 
     /**
@@ -72,9 +57,18 @@ public abstract class Plugin {
      */
     public void setAutoregisterUsers(boolean autoregister) {
         this.autoregisterUsers = autoregister;
-
-        if (this.id > 0) {
-            PreparedStatement st = Database.gps("UPDATE plugins SET autoregister_users = ? WHERE id = ?");
+        this.setAutoregister(autoregister, "autoregister_users");
+    }
+    
+    /**
+     * Updates the given property in the database for this plugin.
+     * @param autoregister The new value for the property
+     * @param property The name of the column that should be updated
+     *                 WARNING: This is not SQL injection safe.
+     */
+    private void setAutoregister(boolean autoregister, String property) {
+    	if (this.id > 0) {
+            PreparedStatement st = Database.gps("UPDATE plugins SET " + property + " = ? WHERE id = ?");
             if (st == null)
                 return;
             try {
@@ -142,71 +136,9 @@ public abstract class Plugin {
      * @param e The event to handle
      */
     public void receive(Event e) {
-      //  this.handlePluginEvent(e);
         if (this.isImplemented(e.getEvent()))
             this.handleEvent(e);
     }
-
-    /**
-     * Handles an event sent to this plugin (events starting with PLUGIN_)
-     * @param e The event to handle
-     */
-    /*protected final void handlePluginEvent(Event e) {
-        int eventId = e.getEvent();
-        if (eventId == Event.PLUGIN_ONCREATECHANNEL) {
-            Channel c = e.getChannel();
-            if (this.isAutoregisterChannels()) {
-                c.register(this);
-            } else {
-                PreparedStatement st = Database.gps("SELECT * FROM plugins_channels " +
-                            "WHERE channel_id = ? AND plugin_id = ? LIMIT 0,1");
-
-                if (st == null)
-                    return;
-
-                try {
-                    st.setInt(1, c.getId());
-                    st.setInt(2, this.getId());
-                    ResultSet result = st.executeQuery();
-                    if (result.next()) {
-                        c.register(this);
-                    }
-                } catch (SQLException ex) {
-                    Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
-                            "Failed to retrieve channel plugins.", ex);
-                } finally {
-                    try { if (st != null) st.close(); } catch (SQLException ex1) {   }
-                }
-            }
-
-
-        } else if (eventId == Event.PLUGIN_ONCREATEUSER) {
-            User u = e.getUser();
-            if (this.isAutoregisterUsers()) {
-                u.register(this);
-            } else if (u.isIdentified()) {
-                PreparedStatement st = Database.gps("SELECT * FROM plugins_users " +
-                            "WHERE user_id = ? AND plugin_id = ? LIMIT 0,1");
-
-                if (st == null)
-                    return;
-
-                try {
-                    st.setInt(1, u.getId());
-                    st.setInt(2, this.getId());
-                    ResultSet result = st.executeQuery();
-                    if (result.next()) {
-                        u.register(this);
-                    }
-                } catch (SQLException ex) {
-                    Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
-                            "Failed to retrieve user plugins.", ex);
-                } finally {
-                    try { if (st != null) st.close(); } catch (SQLException ex1) {   }
-                }
-            }
-        }
-    }*/
 
     /**
      * Handles a received event. May be overriden by an implementing class; the

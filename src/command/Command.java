@@ -19,6 +19,7 @@ import qorebot.plugins.Plugin;
  * @author Ralph Broenink
  */
 public abstract class Command {
+	/** The prefix for every command. */
 	public static final String PREFIX = "!";
 
 	private Plugin plugin;
@@ -43,8 +44,7 @@ public abstract class Command {
 	 * @param autoregisterUsers
 	 *            True when the command should autoregister with new users
 	 */
-	public void init(Plugin plugin, int id, String name,
-			boolean autoregisterChannels, boolean autoregisterUsers) {
+	public void init(Plugin plugin, int id, String name, boolean autoregisterChannels, boolean autoregisterUsers) {
 		this.plugin = plugin;
 		this.id = id;
 		this.name = name;
@@ -59,28 +59,8 @@ public abstract class Command {
 	 *            The new value
 	 */
 	public void setAutoregisterChannels(boolean autoregister) {
-		this.autoregisterChannels = autoregister;
-
-		if (this.id > 0) {
-			PreparedStatement st = Database
-					.gps("UPDATE commands SET autoregister_channels = ? WHERE id = ?");
-			if (st == null)
-				return;
-			try {
-				st.setBoolean(1, autoregister);
-				st.setInt(2, this.id);
-				st.executeUpdate();
-			} catch (SQLException ex) {
-				Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-						"Failed to update autoregister setting", ex);
-			} finally {
-				try {
-					if (st != null)
-						st.close();
-				} catch (SQLException ex1) {
-				}
-			}
-		}
+		this.autoregisterUsers = autoregister;
+		this.setAutoregister(autoregister, "autoregister_users");
 	}
 
 	/**
@@ -91,28 +71,33 @@ public abstract class Command {
 	 */
 	public void setAutoregisterUsers(boolean autoregister) {
 		this.autoregisterUsers = autoregister;
-
-		if (this.id > 0) {
-			PreparedStatement st = Database
-					.gps("UPDATE commands SET autoregister_users = ? WHERE id = ?");
-			if (st == null)
-				return;
-			try {
-				st.setBoolean(1, autoregister);
-				st.setInt(2, this.id);
-				st.executeUpdate();
-			} catch (SQLException ex) {
-				Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-						"Failed to update autoregister setting", ex);
-			} finally {
-				try {
-					if (st != null)
-						st.close();
-				} catch (SQLException ex1) {
-				}
-			}
-		}
+		this.setAutoregister(autoregister, "autoregister_channels");
 	}
+	
+
+    /**
+     * Updates the given property in the database for this command.
+     * @param autoregister The new value for the property
+     * @param property The name of the column that should be updated
+     *                 WARNING: This is not SQL injection safe.
+     */
+    private void setAutoregister(boolean autoregister, String property) {
+    	if (this.id > 0) {
+            PreparedStatement st = Database.gps("UPDATE commands SET " + property + " = ? WHERE id = ?");
+            if (st == null)
+                return;
+            try {
+                st.setBoolean(1, autoregister);
+                st.setInt(2, this.id);
+                st.executeUpdate();
+            } catch (SQLException ex) {
+                Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
+                        "Failed to update autoregister setting", ex);
+            } finally {
+                try { if (st != null) st.close(); } catch (SQLException ex1) {   }
+            }
+        }
+    }
 
 	/**
 	 * Checks whether this command should autoregister with new channels.
@@ -187,8 +172,7 @@ public abstract class Command {
 	 *            The message itself
 	 * @return The result value, or null if none
 	 */
-	public abstract String handleMessage(Channel channel, User user,
-			CommandMessage msg);
+	public abstract String handleMessage(Channel channel, User user, CommandMessage msg);
 
 	/**
 	 * Takes a CommandMessage and parses all subcommands and strings into one
@@ -209,8 +193,7 @@ public abstract class Command {
 	 *            The message
 	 * @return A list of Strings containing the results of all commandmessages.
 	 */
-	public List<String> parseArguments(Channel channel, User user,
-			CommandMessage msg) {
+	public List<String> parseArguments(Channel channel, User user, CommandMessage msg) {
 		ArrayList<String> result = new ArrayList<String>();
 		for (Message m : msg.getMessages()) {
 			if (m instanceof StringMessage) {
@@ -221,28 +204,20 @@ public abstract class Command {
 					// since we can't retrieve the CommandPlugin (due to layer
 					// separation)
 					// we should call parseMessage this weird way.
-					Object o = this.plugin
-							.getClass()
-							.getMethod("parseMessage", Channel.class,
-									User.class, CommandMessage.class)
+					Object o = this.plugin.getClass().getMethod("parseMessage", Channel.class, User.class, CommandMessage.class)
 							.invoke(this.plugin, channel, user, m);
 					if (o != null)
 						res = (String) o;
 				} catch (NoSuchMethodException ex) {
-					Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-							null, ex);
+					Logger.getLogger(Command.class.getName()).log(Level.SEVERE, null, ex);
 				} catch (SecurityException ex) {
-					Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-							null, ex);
+					Logger.getLogger(Command.class.getName()).log(Level.SEVERE, null, ex);
 				} catch (IllegalAccessException ex) {
-					Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-							null, ex);
+					Logger.getLogger(Command.class.getName()).log(Level.SEVERE, null, ex);
 				} catch (IllegalArgumentException ex) {
-					Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-							null, ex);
+					Logger.getLogger(Command.class.getName()).log(Level.SEVERE, null, ex);
 				} catch (InvocationTargetException ex) {
-					Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-							null, ex);
+					Logger.getLogger(Command.class.getName()).log(Level.SEVERE, null, ex);
 				}
 				result.add(res);
 			}
@@ -268,8 +243,7 @@ public abstract class Command {
 	 *            then the size of the argument list, then the last element is
 	 *            assumed.
 	 */
-	public static String getArgumentConcat(List<String> arguments, int begin,
-			int end) {
+	public static String getArgumentConcat(List<String> arguments, int begin, int end) {
 		String concat = "";
 		for (int i = begin; i <= end && i < arguments.size(); i++) {
 			concat = concat + " " + arguments.get(i);
@@ -292,8 +266,7 @@ public abstract class Command {
 	 *            The first id
 	 */
 	public static String getArgumentConcat(List<String> arguments, int begin) {
-		return Command
-				.getArgumentConcat(arguments, begin, arguments.size() - 1);
+		return Command.getArgumentConcat(arguments, begin, arguments.size() - 1);
 	}
 
 	/**
@@ -428,4 +401,5 @@ public abstract class Command {
 	public static boolean isCommand(String input, String command) {
 		return input.equals(command) || input.equals(Command.PREFIX + command);
 	}
+	
 }

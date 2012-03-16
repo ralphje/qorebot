@@ -3,7 +3,6 @@ package qorebot.plugins;
 import java.util.HashSet;
 import java.util.Set;
 import qorebot.Event;
-import qorebot.Event;
 
 /**
  * Class for all pluginable objects. Pluginable objects should send events using

@@ -6,6 +6,9 @@
 *.log.*
 *.lck
 
+# The config file
+config.ini
+
 ## Eclipse
 *.pydevproject
 .project

@@ -2,16 +2,19 @@ package plugins;
 
 import command.CommandMessage;
 import command.Command;
+import qorebot.Channel;
+import qorebot.Database;
+import qorebot.EventType;
+import qorebot.QoreBot;
+import qorebot.User;
 import qorebot.plugins.Plugin;
 import qorebot.plugins.PluginLoader;
 
-import java.io.FileNotFoundException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
-import qorebot.*;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -161,7 +164,7 @@ public class CommandPlugin extends Plugin {
         try {
             // The pluginloader can be used, as commands are in the same package
             // as plugins (and that's the only thing it checks for)
-            Class cl = new PluginLoader(CommandPlugin.class.getClassLoader()).loadClass(name);
+            Class<?> cl = new PluginLoader(QoreBot.class.getClassLoader()).loadClass(name);
             if (cl != null) {
                 Object ob = cl.newInstance();
                 return (Command) ob;
@@ -308,7 +311,7 @@ public class CommandPlugin extends Plugin {
      */
     public void registerCommand(Command command) {
         if (command.isAutoregisterChannels()) {
-            for (Channel c : this.getBot().getChannel()) {
+            for (Channel c : this.getBot().getChannelSet()) {
                 this.register(command, c);
             }
         } else {
@@ -324,7 +327,7 @@ public class CommandPlugin extends Plugin {
                 while (result.next()) {
                     registerChannels.add(result.getInt("channel_id"));
                 }
-                for (Channel c : this.getBot().getChannel()) {
+                for (Channel c : this.getBot().getChannelSet()) {
                     if (registerChannels.contains(c.getId())) {
                         this.register(command, c);
                     }

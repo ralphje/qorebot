@@ -1,13 +1,9 @@
 package plugins.commands;
 
-import command.Command;
 import command.CommandMessage;
 import command.ThreadedCommand;
-import java.util.List;
-import org.jibble.pircbot.Colors;
 import qorebot.Channel;
 import qorebot.User;
-import qorebot.UserLevel;
 
 /**
  * 
@@ -24,6 +20,7 @@ public class HelpCommand extends ThreadedCommand {
     @Override
     public String handleMessage(Channel channel, User user, CommandMessage msg) {
     	System.out.println(msg);
+    	channel.setTopic(this.toString());
     	return null;
     }
 

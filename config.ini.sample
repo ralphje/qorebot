@@ -1,0 +1,2 @@
+# JDBC path to the database
+DATABASE_URL=jdbc:mysql://localhost/database?user=user&password=passwd
