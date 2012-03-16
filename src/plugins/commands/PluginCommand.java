@@ -1,8 +1,6 @@
 package plugins.commands;
 
-import command.Command;
-import command.CommandMessage;
-import command.ThreadedCommand;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -11,6 +9,9 @@ import qorebot.User;
 import qorebot.UserLevel;
 import qorebot.plugins.Plugin;
 import qorebot.plugins.Pluginable;
+import qorebot.plugins.commands.Command;
+import qorebot.plugins.commands.ThreadedCommand;
+import qorebot.plugins.commands.message.CommandMessage;
 
 /**
  * Core command that handles plugin-based commands. This command is capable of

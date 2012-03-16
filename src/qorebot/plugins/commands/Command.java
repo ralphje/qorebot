@@ -1,4 +1,4 @@
-package command;
+package qorebot.plugins.commands;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -8,8 +8,13 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.jibble.pircbot.Colors;
+
+
 import qorebot.*;
 import qorebot.plugins.Plugin;
+import qorebot.plugins.commands.message.CommandMessage;
+import qorebot.plugins.commands.message.Message;
+import qorebot.plugins.commands.message.StringMessage;
 
 /**
  * A command is something like a plugin, with the main difference that it works
@@ -75,29 +80,29 @@ public abstract class Command {
 	}
 	
 
-    /**
-     * Updates the given property in the database for this command.
-     * @param autoregister The new value for the property
-     * @param property The name of the column that should be updated
-     *                 WARNING: This is not SQL injection safe.
-     */
-    private void setAutoregister(boolean autoregister, String property) {
-    	if (this.id > 0) {
-            PreparedStatement st = Database.gps("UPDATE commands SET " + property + " = ? WHERE id = ?");
-            if (st == null)
-                return;
-            try {
-                st.setBoolean(1, autoregister);
-                st.setInt(2, this.id);
-                st.executeUpdate();
-            } catch (SQLException ex) {
-                Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-                        "Failed to update autoregister setting", ex);
-            } finally {
-                try { if (st != null) st.close(); } catch (SQLException ex1) {   }
-            }
-        }
-    }
+	/**
+	 * Updates the given property in the database for this command.
+	 * @param autoregister The new value for the property
+	 * @param property The name of the column that should be updated
+	 *                 WARNING: This is not SQL injection safe.
+	 */
+	private void setAutoregister(boolean autoregister, String property) {
+		if (this.id > 0) {
+    		PreparedStatement st = Database.gps("UPDATE commands SET " + property + " = ? WHERE id = ?");
+    		if (st == null)
+    			return;
+    		try {
+    			st.setBoolean(1, autoregister);
+    			st.setInt(2, this.id);
+    			st.executeUpdate();
+    		} catch (SQLException ex) {
+    			Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
+    					"Failed to update autoregister setting", ex);
+    		} finally {
+    			try { if (st != null) st.close(); } catch (SQLException ex1) {   }
+    		}
+		}
+	}
 
 	/**
 	 * Checks whether this command should autoregister with new channels.
@@ -141,7 +146,7 @@ public abstract class Command {
 	 *            The user who sent the message
 	 * @param msg
 	 *            The message.
-	 * @see #receive(qorebot.Channel, qorebot.User, command.CommandMessage)
+	 * @see #receive(qorebot.Channel, qorebot.User, qorebot.plugins.commands.message.CommandMessage)
 	 */
 	public final String receive(User user, CommandMessage msg) {
 		return this.receive(null, user, msg);
@@ -181,7 +186,7 @@ public abstract class Command {
 	 * 
 	 * Since the Command is unable to get access to the owning plugin since this
 	 * is a plugin loaded by the PluginLoader,
-	 * {@link plugins.CommandPlugin#parseMessage(qorebot.Channel, qorebot.User, command.CommandMessage)}
+	 * {@link plugins.CommandPlugin#parseMessage(qorebot.Channel, qorebot.User, qorebot.plugins.commands.message.CommandMessage)}
 	 * is executed directly on {@link #getPlugin()}. This may cause weird
 	 * problems, but is the only way to perform the action.
 	 * 
@@ -300,8 +305,7 @@ public abstract class Command {
 	 * @param personal
 	 *            If true, the user is personally addressed in a channel
 	 */
-	public static void sendMessage(Channel channel, User user, String message,
-			boolean personal) {
+	public static void sendMessage(Channel channel, User user, String message, boolean personal) {
 		if (channel == null)
 			user.sendMessage(message);
 		else if (personal)
@@ -321,12 +325,8 @@ public abstract class Command {
 	 * @param message
 	 *            The message to send.
 	 */
-	public static void sendErrorMessage(Channel channel, User user,
-			String message) {
-		if (channel == null)
-			user.sendMessage(Colors.BOLD + Colors.RED + message);
-		else
-			channel.sendMessage(Colors.BOLD + Colors.RED + message);
+	public static void sendErrorMessage(Channel channel, User user, String message) {
+		Command.sendErrorMessage(channel, user, message, false);
 	}
 
 	/**
@@ -342,15 +342,23 @@ public abstract class Command {
 	 * @param personal
 	 *            If true, the user is personally addressed in a channel
 	 */
-	public static void sendErrorMessage(Channel channel, User user,
-			String message, boolean personal) {
+	public static void sendErrorMessage(Channel channel, User user, String message, boolean personal) {
 		if (channel == null)
 			user.sendMessage(message);
 		else if (personal)
-			channel.sendMessage(Colors.BOLD + Colors.RED + user.getNickname()
-					+ ": " + message);
+			channel.sendMessage(Command.wrapErrorMessage(user.getNickname() + ": " + message));
 		else
-			channel.sendMessage(Colors.BOLD + Colors.RED + message);
+			channel.sendMessage(Command.wrapErrorMessage(message));
+	}
+	
+	/**
+	 * Wraps a message like it's a error message.
+	 * 
+	 * @param message The error message
+	 * @return A stylized error message
+	 */
+	public static String wrapErrorMessage(String message) {
+		return Colors.BOLD + Colors.RED + message;
 	}
 
 	/**
@@ -367,8 +375,7 @@ public abstract class Command {
 	 *            The user
 	 * @return True if the user as sufficient permissions.
 	 */
-	public static boolean checkPermissions(String action, UserLevel requiredLevel,
-			Channel channel, User user) {
+	public static boolean checkPermissions(String action, UserLevel requiredLevel, Channel channel, User user) {
 		UserLevel actualLevel = UserLevel.UNKNOWN;
 		if (channel == null) {
 			actualLevel = user.getLevel();

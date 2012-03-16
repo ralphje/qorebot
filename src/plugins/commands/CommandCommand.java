@@ -1,8 +1,5 @@
 package plugins.commands;
 
-import command.Command;
-import command.CommandMessage;
-import command.ThreadedCommand;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashSet;
@@ -17,6 +14,9 @@ import qorebot.Channel;
 import qorebot.User;
 import qorebot.UserLevel;
 import qorebot.plugins.Plugin;
+import qorebot.plugins.commands.Command;
+import qorebot.plugins.commands.ThreadedCommand;
+import qorebot.plugins.commands.message.CommandMessage;
 
 /**
  * Core command that handles plugin-based commands. This command is capable of
@@ -47,11 +47,11 @@ public class CommandCommand extends ThreadedCommand {
 			return null;
 
 		Plugin commandPlugin = this.getPlugin();
-        if (commandPlugin == null) {
-            Command.sendErrorMessage(channel, user, 
-            		"The plugin plugins.CommandPlugin is not loaded, which is kinda weird.");
-            return null;
-        }
+		if (commandPlugin == null) {
+			Command.sendErrorMessage(channel, user, 
+					"The plugin plugins.CommandPlugin is not loaded, which is kinda weird.");
+			return null;
+		}
 		
 		try {
 			List<String> arguments = this.parseArguments(channel, user, msg);
@@ -124,18 +124,18 @@ public class CommandCommand extends ThreadedCommand {
 		// It's not a channel, but a nick
 		if (channel == null) {
 			user.sendMessage("The following commands are loaded for " + user.getNickname() + ":");
-            String r = "";
-            Set<Command> s = (Set<Command>) plugin.getClass().getMethod("getCommands", User.class).invoke(plugin, user);
-            for (Command c : s)
-                r += c.getName() + "; ";
-            user.sendMessage(r);
-        } else {
-            channel.sendMessage("The following commands are loaded for " + channel.getName() + ":");
-            String r = "";
-            Set<Command> s = (Set<Command>) plugin.getClass().getMethod("getCommands", Channel.class).invoke(plugin, channel);
-            for (Command c : s)
-                r += c.getName() + "; ";
-            channel.sendMessage(r);
+			String r = "";
+			Set<Command> s = (Set<Command>) plugin.getClass().getMethod("getCommands", User.class).invoke(plugin, user);
+			for (Command c : s)
+				r += c.getName() + "; ";
+			user.sendMessage(r);
+		} else {
+			channel.sendMessage("The following commands are loaded for " + channel.getName() + ":");
+			String r = "";
+			Set<Command> s = (Set<Command>) plugin.getClass().getMethod("getCommands", Channel.class).invoke(plugin, channel);
+			for (Command c : s)
+				r += c.getName() + "; ";
+			channel.sendMessage(r);
 		}
 	}
 	
@@ -149,23 +149,23 @@ public class CommandCommand extends ThreadedCommand {
 	 */
 	private void loadCommand(Channel channel, User user, Plugin plugin, String command) throws IllegalAccessException, IllegalArgumentException, NoSuchMethodException, SecurityException, InvocationTargetException {
 		Object o = null;
-        try {
-        	o = plugin.getClass().getMethod("createCommand", String.class).invoke(plugin, command);
-        } catch (InvocationTargetException e) { }
-        
-        if (o == null) {
-            Command.sendMessage(channel, user,
-                    Colors.BOLD + Colors.RED + "Loading plugin failed.");
-        } else {
-            Command c = (Command) o;
-            c.init(plugin, -1, command, false, false);
-            if (channel == null) {
-            	plugin.getClass().getMethod("register", Command.class, User.class).invoke(plugin, c, user);
-            } else {
-            	plugin.getClass().getMethod("register", Command.class, Channel.class).invoke(plugin, c, channel);
-            }
-            Command.sendMessage(channel, user, "Command loaded. For permanent use, please use 'add'");
-        }
+		try {
+			o = plugin.getClass().getMethod("createCommand", String.class).invoke(plugin, command);
+		} catch (InvocationTargetException e) { }
+		
+		if (o == null) {
+			Command.sendMessage(channel, user,
+					Colors.BOLD + Colors.RED + "Loading plugin failed.");
+		} else {
+			Command c = (Command) o;
+			c.init(plugin, -1, command, false, false);
+			if (channel == null) {
+				plugin.getClass().getMethod("register", Command.class, User.class).invoke(plugin, c, user);
+			} else {
+				plugin.getClass().getMethod("register", Command.class, Channel.class).invoke(plugin, c, channel);
+			}
+			Command.sendMessage(channel, user, "Command loaded. For permanent use, please use 'add'");
+		}
 	}
 	
 	/**
@@ -177,7 +177,7 @@ public class CommandCommand extends ThreadedCommand {
 		// way.
 		final Channel c = channel;
 		final User u = user;
-        final Plugin cp = plugin;
+		final Plugin cp = plugin;
 		(new Thread() {
 			@SuppressWarnings("unchecked")
 			@Override
@@ -189,8 +189,8 @@ public class CommandCommand extends ThreadedCommand {
 
 				try {
 					Set<Command> cmds = new HashSet<Command>((Set<Command>) cp.getClass().getMethod("getCommands").invoke(cp));
-                    for (Command c : cmds)
-                        cp.getClass().getMethod("reloadCommand", Command.class).invoke(cp, c);
+					for (Command c : cmds)
+						cp.getClass().getMethod("reloadCommand", Command.class).invoke(cp, c);
 				} catch (Exception e) {
 					Command.sendErrorMessage(c, u, "Fatal error while reloading commands. Got error "
 									+ e.getClass().getName() + " "
