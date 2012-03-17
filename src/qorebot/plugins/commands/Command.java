@@ -1,6 +1,7 @@
 package qorebot.plugins.commands;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -57,6 +58,10 @@ public abstract class Command {
 		this.autoregisterUsers = autoregisterUsers;
 	}
 
+	// -------------------------------------------------------------------------
+	// Command management
+	// -------------------------------------------------------------------------
+
 	/**
 	 * Sets whether this command should autoregister with new channels.
 	 * 
@@ -103,7 +108,92 @@ public abstract class Command {
     		}
 		}
 	}
+	
 
+	/**
+	 * Installs the Plugin with the given name into the bot.
+	 * 
+	 * @param bot
+	 *            The bot in which we should install the plugin
+	 * @param name
+	 *            The name of the plugin to install.
+	 * @param autoregisterChannels
+	 *            True if the plugin should be registered automatically to every
+	 *            channel.
+	 * @param autoregisterUsers
+	 *            True if the plugin should be registered automatically to every
+	 *            user.
+	 * @return True iff the installation succeeded.
+	 */
+	public static boolean install(Plugin plugin, String name, boolean autoregisterChannels, boolean autoregisterUsers) {
+		try {
+			// Load plugin and check if it exists.
+			Command command = (Command) plugin.getClass().getMethod("createCommand", String.class).invoke(plugin, name);
+			if (command == null) {
+				Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
+						"Could not load and thus not install the plugin " + name);
+				return false;
+			}
+			
+			// Insert the plugin to the plugins table
+			PreparedStatement st = Database.gps("INSERT INTO commands(name, autoregister_channels, autoregister_users) VALUES(?,?,?)");
+			if (st == null)
+				return false;
+			
+			ResultSet keys = null;
+			int id = 0;
+			
+			try {
+				st.setString(1, name);
+				st.setBoolean(2, autoregisterChannels);
+				st.setBoolean(3, autoregisterUsers);
+				st.executeUpdate();
+				
+				keys = st.getGeneratedKeys();
+				keys.next();
+				id = keys.getInt(0);
+			} catch (SQLException ex) {
+				Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
+						"Failed to install the plugin", ex);
+				return false;
+			} finally {
+				try {
+					if (keys != null)
+						keys.close();
+				} catch (SQLException ex1) {
+				}
+				try {
+					if (st != null)
+						st.close();
+				} catch (SQLException ex1) {
+				}
+			}
+	
+			// Call the installation handler of this plugin
+			command.handleInstalled();
+			
+			// Update the bot with the new information
+			plugin.getClass()
+					.getMethod("initCommand", Command.class, int.class,
+							String.class, boolean.class, boolean.class)
+					.invoke(command, id, name, autoregisterChannels,
+							autoregisterUsers);
+			
+		} catch (IllegalAccessException | IllegalArgumentException
+				| InvocationTargetException | NoSuchMethodException
+				| SecurityException e) {
+			Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
+					"Failed to install the command", e);
+			return false;
+		}
+		
+		return true;
+	}
+
+	// -------------------------------------------------------------------------
+	// Getters
+	// -------------------------------------------------------------------------
+	
 	/**
 	 * Checks whether this command should autoregister with new channels.
 	 */
@@ -139,6 +229,18 @@ public abstract class Command {
 		return this.name;
 	}
 
+	/**
+	 * The install method is called when the Command is being installed. This
+	 * can be used to create a table structure and/or provide additional data.
+	 * Please note that this function may be called multiple times.
+	 */
+	public void handleInstalled() {
+	}
+	
+	// -------------------------------------------------------------------------
+	// Receivers
+	// -------------------------------------------------------------------------
+	
 	/**
 	 * Receives a message from an user.
 	 * 
@@ -178,7 +280,12 @@ public abstract class Command {
 	 * @return The result value, or null if none
 	 */
 	public abstract String handleMessage(Channel channel, User user, CommandMessage msg);
+	
 
+	// -------------------------------------------------------------------------
+	// Argument parsing
+	// -------------------------------------------------------------------------
+	
 	/**
 	 * Takes a CommandMessage and parses all subcommands and strings into one
 	 * list of strings. As commands may return null, the returned list may
@@ -274,6 +381,24 @@ public abstract class Command {
 		return Command.getArgumentConcat(arguments, begin, arguments.size() - 1);
 	}
 
+	// -------------------------------------------------------------------------
+	// Helpers
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Checks whether the given command is in the input.
+	 * 
+	 * @param command
+	 *            The command to be checked for
+	 * @param input
+	 *            The (first) argument to check whether it is the given command
+	 * @return True if the input equals the command or the command prefixed with
+	 *         the default prefix.
+	 */
+	public static boolean isCommand(String input, String command) {
+		return input.equals(command) || input.equals(Command.PREFIX + command);
+	}
+	
 	/**
 	 * Sends a message to the channel if this is not null, or to the user
 	 * otherwise.
@@ -394,19 +519,4 @@ public abstract class Command {
 			return true;
 		}
 	}
-
-	/**
-	 * Checks whether the given command is in the input.
-	 * 
-	 * @param command
-	 *            The command to be checked for
-	 * @param input
-	 *            The (first) argument to check whether it is the given command
-	 * @return True if the input equals the command or the command prefixed with
-	 *         the default prefix.
-	 */
-	public static boolean isCommand(String input, String command) {
-		return input.equals(command) || input.equals(Command.PREFIX + command);
-	}
-	
 }

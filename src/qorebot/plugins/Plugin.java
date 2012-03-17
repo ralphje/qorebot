@@ -1,6 +1,7 @@
 package qorebot.plugins;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -44,6 +45,10 @@ public abstract class Plugin {
 		this.autoregisterChannels = autoregisterChannels;
 		this.autoregisterUsers = autoregisterUsers;
 	}
+
+	// -------------------------------------------------------------------------
+	// Plugin management
+	// -------------------------------------------------------------------------
 
 	/**
 	 * Sets whether this plugin should autoregister with new channels.
@@ -99,6 +104,77 @@ public abstract class Plugin {
 	}
 
 	/**
+	 * Installs the Plugin with the given name into the bot.
+	 * 
+	 * @param bot
+	 *            The bot in which we should install the plugin
+	 * @param name
+	 *            The name of the plugin to install.
+	 * @param autoregisterChannels
+	 *            True if the plugin should be registered automatically to every
+	 *            channel.
+	 * @param autoregisterUsers
+	 *            True if the plugin should be registered automatically to every
+	 *            user.
+	 * @return True iff the installation succeeded.
+	 */
+	public static boolean install(QoreBot bot, String name, boolean autoregisterChannels, boolean autoregisterUsers) {
+		// Load plugin and check if it exists.
+		Plugin plugin = bot.createPlugin(name);
+		if (plugin == null) {
+			Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
+					"Could not load and thus not install the plugin " + name);
+			return false;
+		}
+		
+		// Insert the plugin to the plugins table
+		PreparedStatement st = Database.gps("INSERT INTO plugins(name, autoregister_channels, autoregister_users) VALUES(?,?,?)");
+		if (st == null)
+			return false;
+		
+		ResultSet keys = null;
+		int id = 0;
+		
+		try {
+			st.setString(1, name);
+			st.setBoolean(2, autoregisterChannels);
+			st.setBoolean(3, autoregisterUsers);
+			st.executeUpdate();
+			
+			keys = st.getGeneratedKeys();
+			keys.next();
+			id = keys.getInt(0);
+		} catch (SQLException ex) {
+			Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
+					"Failed to install the plugin", ex);
+			return false;
+		} finally {
+			try {
+				if (keys != null)
+					keys.close();
+			} catch (SQLException ex1) {
+			}
+			try {
+				if (st != null)
+					st.close();
+			} catch (SQLException ex1) {
+			}
+		}
+
+		// Call the installation handler of this plugin
+		plugin.handleInstalled();
+		
+		// Update the bot with the new information
+		bot.initPlugin(plugin, id, name, autoregisterChannels, autoregisterUsers);
+		
+		return true;
+	}
+
+	// -------------------------------------------------------------------------
+	// Getters
+	// -------------------------------------------------------------------------
+	
+	/**
 	 * Returns the bot this plugin works on.
 	 */
 	public final QoreBot getBot() {
@@ -132,6 +208,18 @@ public abstract class Plugin {
 	public final String getName() {
 		return this.name;
 	}
+	
+	/**
+	 * The install method is called when the Plugin is being installed. This
+	 * can be used to create a table structure and/or provide additional data.
+	 * Please note that this function may be called multiple times.
+	 */
+	public void handleInstalled() {
+	}
+	
+	// -------------------------------------------------------------------------
+	// isImplemented method
+	// -------------------------------------------------------------------------
 
 	/**
 	 * Checks whether the method (defined in Event) is handled by this class.
@@ -142,6 +230,11 @@ public abstract class Plugin {
 	 */
 	public abstract boolean isImplemented(EventType method);
 
+
+	// -------------------------------------------------------------------------
+	// Event handlers
+	// -------------------------------------------------------------------------
+	
 	/**
 	 * Receives an event from a pluginable object. Should not be overriden by
 	 * any plugin. Passes the event to handleEvent if the event is implemented
@@ -307,6 +400,11 @@ public abstract class Plugin {
 			break;
 		}
 	}
+	
+
+	// -------------------------------------------------------------------------
+	// Method stubs
+	// -------------------------------------------------------------------------
 
 	/** Called when an User is created */
 	public void onCreateUser(User user) {

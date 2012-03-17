@@ -278,8 +278,7 @@ public class QoreBot extends PircBot {
 			while (result.next()) {
 				String name = "";
 				name = result.getString("name");
-				// Plugin plugin = (Plugin) Class.forName(name).newInstance();
-
+				
 				Plugin plugin = this.createPlugin(name);
 
 				this.initPlugin(plugin, result.getInt("id"), name,

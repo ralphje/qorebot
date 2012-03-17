@@ -8,8 +8,6 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.jibble.pircbot.Colors;
-
 import qorebot.Channel;
 import qorebot.User;
 import qorebot.UserLevel;
@@ -154,8 +152,7 @@ public class CommandCommand extends ThreadedCommand {
 		} catch (InvocationTargetException e) { }
 		
 		if (o == null) {
-			Command.sendMessage(channel, user,
-					Colors.BOLD + Colors.RED + "Loading plugin failed.");
+			Command.sendErrorMessage(channel, user, "Loading plugin failed.");
 		} else {
 			Command c = (Command) o;
 			c.init(plugin, -1, command, false, false);
