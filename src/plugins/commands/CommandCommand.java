@@ -5,6 +5,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -35,70 +36,113 @@ import qorebot.plugins.commands.message.CommandMessage;
 public class CommandCommand extends ThreadedCommand {
 
 	@Override
-	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
-		return msg.isCommand("command");
+	public List<String> supportedCommands() {
+		return Command.createList("command", "commands");
+	}
+	
+	@Override
+	public List<String> listedCommands(Channel channel, User user) {
+		if (user.hasLevel(UserLevel.ADMINISTRATOR, channel))
+			return Command.createList("command", "commands");
+		else
+			return Command.createList("commands");
 	}
 	
 	@Override
 	public String handleMessage(Channel channel, User user, CommandMessage msg) {
-		if (!Command.checkPermissions("managing commands", UserLevel.ADMINISTRATOR, channel, user))
-			return null;
-
-		Plugin commandPlugin = this.getPlugin();
-		if (commandPlugin == null) {
-			Command.sendErrorMessage(channel, user, 
-					"The plugin plugins.CommandPlugin is not loaded, which is kinda weird.");
-			return null;
-		}
-		
 		try {
-			List<String> arguments = this.parseArguments(channel, user, msg);
-
-			if (arguments.size() == 1) { // No arguments
-				/*
-				 * Command: !command 
-				 * Shows all loaded commands.
-				 */
+			Plugin commandPlugin = this.getPlugin();
+			if (commandPlugin == null) {
+				Command.sendErrorMessage(channel, user, 
+						"The plugin plugins.CommandPlugin is not loaded, which is kinda weird.");
+				return null;
+			}
+			
+			if (msg.isCommand("commands")) {
 				listCommands(channel, user, commandPlugin);
 				
-			} else if (arguments.get(1).toLowerCase().equals("load")) {
-				/*
-				 * Command: !command load <command> 
-				 * Loads the command temporarily for the current user or channel
-				 */
+			} else if (msg.isCommand("command")) {
 				
-				if (arguments.size() == 2) { // Only !plugin load is passed
-					Command.sendErrorMessage(channel, user, "Invalid command. Use '!help plugin' for more information.");
-				} else { // Argument is passed
-					this.loadCommand(channel, user, commandPlugin, arguments.get(2));
-				}
-
-			} else if (arguments.get(1).toLowerCase().equals("add")) {
-				/*
-				 * Command: !command add [command] 
-				 * Loads the command permanent for  the current user or channel
-				 */
-				
-				if (arguments.size() == 2) { // Only !plugin add is passed
-					Command.sendErrorMessage(channel, user, "Invalid command. Use '!help plugin' for more information.");
+				if (!Command.checkPermissions("managing commands", UserLevel.ADMINISTRATOR, channel, user))
+					return null;
+		
+			
+				List<String> arguments = this.parseArguments(channel, user, msg);
+	
+				if (arguments.size() == 1) { // No arguments
+					/*
+					 * Command: !command 
+					 * Shows all loaded commands.
+					 */
+					listCommand(channel, user, commandPlugin);
+	
+				} else if (arguments.get(1).toLowerCase().equals("install")) {
+					/*
+					 * Command: !plugin install <plugin> <autoloadC> <autoloadU> 
+					 * Installs a plugin into the database.
+					 */
+					if (!Command.checkPermissions("installing commands", UserLevel.OWNER, channel, user))
+						return null;
+					
+					if (arguments.size() < 5) { // Only !plugin load is passed
+						Command.sendErrorMessage(channel, user, "Invalid command. Use '!help command' for more information.");
+					} else { // Argument is passed
+						this.installCommand(channel, user, commandPlugin,
+								arguments.get(2), 
+								Command.stringToBool(arguments.get(3)),
+								Command.stringToBool(arguments.get(4)));
+					}
+					
+				} else if (arguments.get(1).toLowerCase().equals("load")) {
+					/*
+					 * Command: !command load <command> 
+					 * Loads the command temporarily for the current user or channel
+					 */
+					
+					if (arguments.size() == 2) { // Only !plugin load is passed
+						Command.sendErrorMessage(channel, user, "Invalid command. Use '!help command' for more information.");
+					} else { // Argument is passed
+						this.loadCommand(channel, user, commandPlugin, arguments.get(2));
+					}
+	
+				} else if (arguments.get(1).toLowerCase().equals("unload")) {
+					/*
+					 * Command: !command load <command> 
+					 * Loads the command temporarily for the current user or channel
+					 */
+					
+					if (arguments.size() == 2) { // Only !plugin load is passed
+						Command.sendErrorMessage(channel, user, "Invalid command. Use '!help command' for more information.");
+					} else { // Argument is passed
+						this.unloadCommand(channel, user, commandPlugin, arguments.get(2));
+					}
+					
+				} else if (arguments.get(1).toLowerCase().equals("add")) {
+					/*
+					 * Command: !command add [command] 
+					 * Loads the command permanent for  the current user or channel
+					 */
+					
+					if (arguments.size() == 2) { // Only !plugin add is passed
+						Command.sendErrorMessage(channel, user, "Invalid command. Use '!help command' for more information.");
+						
+					} else {
+						this.addCommand(channel, user, commandPlugin, arguments.get(2));
+					}
+	
+				} else if (arguments.get(1).toLowerCase().equals("reload")) {
+					/*
+					 * Command: !command reload 
+					 * Reloads all commands
+					 */
+					
+					this.reloadCommands(channel, user, commandPlugin);
 					
 				} else {
-					// TODO: Implement
-					Command.sendErrorMessage(channel, user,  "Not implemented yet.");
+					Command.sendErrorMessage(channel, user, "Invalid command. Use '!help command' for more information.");
 				}
-
-			} else if (arguments.get(1).toLowerCase().equals("reload")) {
-				/*
-				 * Command: !command reload 
-				 * Reloads all commands
-				 */
-				
-				this.reloadCommands(channel, user, commandPlugin);
-				
-			} else {
-				Command.sendErrorMessage(channel, user, "Invalid command. Use '!help plugin' for more information.");
 			}
-		 
+			
 		} catch (IllegalAccessException | IllegalArgumentException
 				| NoSuchMethodException | SecurityException
 				| InvocationTargetException e) {
@@ -108,7 +152,6 @@ public class CommandCommand extends ThreadedCommand {
 	}
 
 
-	
 	/**
 	 * Lists all commands for the given channel/user.
 	 * @throws SecurityException 
@@ -119,6 +162,35 @@ public class CommandCommand extends ThreadedCommand {
 	 */
 	@SuppressWarnings("unchecked")
 	private void listCommands(Channel channel, User user, Plugin plugin) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+		// It's not a channel, but a nick
+		Set<Command> commands = null;
+		Set<String> userCommands = new TreeSet<String>();
+		if (channel == null) {
+			commands = (Set<Command>) plugin.getClass().getMethod("getCommands", User.class).invoke(plugin, user);
+		} else {
+			commands = (Set<Command>) plugin.getClass().getMethod("getCommands", Channel.class).invoke(plugin, channel);
+		}
+		for (Command c : commands) {
+			userCommands.addAll(c.listedCommands(channel, user));
+		}
+		String result = "The following commands are supported for " + (channel == null ? user.getNickname() : channel.getName()) + ": ";
+		for (String s : userCommands) {
+			result += s + ", ";
+		}
+		result = result.substring(0,result.length()-2);
+		Command.sendMessage(channel, user, result);
+	}
+	
+	/**
+	 * Lists all loaded commands (their plugin names) for the given channel/user.
+	 * @throws SecurityException 
+	 * @throws NoSuchMethodException 
+	 * @throws InvocationTargetException 
+	 * @throws IllegalArgumentException 
+	 * @throws IllegalAccessException 
+	 */
+	@SuppressWarnings("unchecked")
+	private void listCommand(Channel channel, User user, Plugin plugin) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
 		// It's not a channel, but a nick
 		if (channel == null) {
 			user.sendMessage("The following commands are loaded for " + user.getNickname() + ":");
@@ -137,33 +209,125 @@ public class CommandCommand extends ThreadedCommand {
 		}
 	}
 	
+
 	/**
-	 * Loads the command for the given channel/user
+	 * Installs the command
 	 * @throws SecurityException 
 	 * @throws NoSuchMethodException 
 	 * @throws IllegalArgumentException 
 	 * @throws IllegalAccessException 
-	 * @throws InvocationTargetException 
 	 */
-	private void loadCommand(Channel channel, User user, Plugin plugin, String command) throws IllegalAccessException, IllegalArgumentException, NoSuchMethodException, SecurityException, InvocationTargetException {
+	private void installCommand(Channel channel, User user, Plugin plugin, String command, boolean autoregisterChannels, boolean autoregisterUsers) throws IllegalAccessException, IllegalArgumentException, NoSuchMethodException, SecurityException {
 		Object o = null;
 		try {
 			o = plugin.getClass().getMethod("createCommand", String.class).invoke(plugin, command);
 		} catch (InvocationTargetException e) { }
-		
+
+		// Check if the command is loaded
 		if (o == null) {
-			Command.sendErrorMessage(channel, user, "Loading plugin failed.");
+			Command.sendErrorMessage(channel, user, "Command could not be found.");
+
+		} else {
+			// Loads the plugin
+			if (Command.install(plugin, command, autoregisterChannels, autoregisterUsers)) {
+				if (autoregisterChannels && autoregisterUsers) {
+					Command.sendMessage(channel, user, "Command was successfully installed and loaded for every channel and user.");
+				} else if (autoregisterChannels) {
+					Command.sendMessage(channel, user, "Command was successfully installed and loaded for every channel.");
+				} else if (autoregisterUsers) {
+					Command.sendMessage(channel, user, "Command was successfully installed and loaded for every user.");
+				} else {
+					Command.sendMessage(channel, user, "Command was successfully installed. Use 'load' or 'add' to load the plugin.");
+				}
+			} else {
+				Command.sendErrorMessage(channel, user, "Command installation failed. Maybe the plugin was already installed.");
+			}
+		}
+	}
+	
+
+	/**
+	 * Loads the plugin for the given channel/user
+	 * @throws SecurityException 
+	 * @throws NoSuchMethodException 
+	 * @throws InvocationTargetException 
+	 * @throws IllegalArgumentException 
+	 * @throws IllegalAccessException 
+	 */
+	private void addCommand(Channel channel, User user, Plugin plugin, String command) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+		// Find the command instance in the Bot
+		Object o = plugin.getClass().getMethod("getCommand", String.class).invoke(plugin, command);
+		if (o == null) {
+			Command.sendErrorMessage(channel, user, "Command is unknown. Have you already installed it?");
+			
 		} else {
 			Command c = (Command) o;
-			c.init(plugin, -1, command, false, false);
+			// Loads the plugin
+			if (channel == null) {
+				plugin.getClass().getMethod("add", Command.class, User.class).invoke(plugin, c, user);
+			} else {
+				plugin.getClass().getMethod("add", Command.class, Channel.class).invoke(plugin, c, channel);
+			}
+			Command.sendMessage(channel, user,
+					"Command loaded. For permanent use, please use 'add'");
+		}
+	}
+	
+
+	/**
+	 * Loads the plugin for the given channel/user
+	 * @throws SecurityException 
+	 * @throws NoSuchMethodException 
+	 * @throws InvocationTargetException 
+	 * @throws IllegalArgumentException 
+	 * @throws IllegalAccessException 
+	 */
+	private void loadCommand(Channel channel, User user, Plugin plugin, String command) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+		// Find the command instance in the Bot
+		Object o = plugin.getClass().getMethod("getCommand", String.class).invoke(plugin, command);
+		if (o == null) {
+			Command.sendErrorMessage(channel, user, "Command is unknown. Have you already installed it?");
+			
+		} else {
+			Command c = (Command) o;
+			// Loads the plugin
 			if (channel == null) {
 				plugin.getClass().getMethod("register", Command.class, User.class).invoke(plugin, c, user);
 			} else {
 				plugin.getClass().getMethod("register", Command.class, Channel.class).invoke(plugin, c, channel);
 			}
-			Command.sendMessage(channel, user, "Command loaded. For permanent use, please use 'add'");
+			Command.sendMessage(channel, user,
+					"Command loaded. For permanent use, please use 'add'");
 		}
 	}
+	
+	/**
+	 * Unloads the plugin for the given channel/user
+	 * @throws SecurityException 
+	 * @throws NoSuchMethodException 
+	 * @throws InvocationTargetException 
+	 * @throws IllegalArgumentException 
+	 * @throws IllegalAccessException 
+	 */
+	private void unloadCommand(Channel channel, User user, Plugin plugin, String command) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+		// Find the command instance in the Bot
+		Object o = plugin.getClass().getMethod("getCommand", String.class).invoke(plugin, command);
+		if (o == null) {
+			Command.sendErrorMessage(channel, user, "Command is unknown, so it isn't loaded.");
+			
+		} else {
+			Command c = (Command) o;
+			// Loads the plugin
+			if (channel == null) {
+				plugin.getClass().getMethod("unregister", Command.class, User.class).invoke(plugin, c, user);
+			} else {
+				plugin.getClass().getMethod("unregister", Command.class, Channel.class).invoke(plugin, c, channel);
+			}
+			Command.sendMessage(channel, user,
+					"Command succesfully unloaded.");
+		}
+	}
+	
 	
 	/**
 	 * Reloads all commands in the given channel.
@@ -194,7 +358,7 @@ public class CommandCommand extends ThreadedCommand {
 									+ e.getMessage());
 				}
 
-				Command.sendMessage(c, u, "All commands are reloaded (except those added by !command load)");
+				Command.sendMessage(c, u, "All commands are reloaded.");
 			}
 		}).start();
 	}

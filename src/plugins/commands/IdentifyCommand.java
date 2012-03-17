@@ -27,12 +27,18 @@ import qorebot.plugins.commands.message.CommandMessage;
 public class IdentifyCommand extends ThreadedCommand {
 
 	@Override
-	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
-		return msg.isCommand("identify") || msg.isCommand("unidentify")
-				|| msg.isCommand("whoami") || msg.isCommand("changepass")
-				|| msg.isCommand("register");
+	public List<String> supportedCommands() {
+		return Command.createList("identify", "unidentify", "whoami", "changepass", "register");
 	}
-
+	
+	@Override
+	public List<String> listedCommands(Channel channel, User user) {
+		if (channel == null)
+			return Command.createList("identify", "unidentify", "whoami", "changepass", "register");
+		else
+			return Command.createList("whoami"); // in a channel, only !whoami works
+	}
+	
 	@Override
 	public String handleMessage(Channel channel, User user, CommandMessage msg) {
 		// Check whether we're in a channel for private commands

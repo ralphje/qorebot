@@ -23,8 +23,8 @@ import qorebot.plugins.commands.message.CommandMessage;
 public class OpVoiceCommand extends ThreadedCommand {
 
 	@Override
-	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
-		return msg.isCommand("op") || msg.isCommand("voice");
+	public List<String> supportedCommands() {
+		return Command.createList("op", "voice");
 	}
 
 	@Override

@@ -23,7 +23,7 @@ public class OpVoicePlugin extends Plugin {
 
 	@Override
 	public boolean isImplemented(EventType method) {
-		return method == EventType.CHANNEL_ONJOIN;
+		return method == EventType.CHANNEL_ONJOIN || method == EventType.CHANNEL_ONOP;
 	}
 
 	@Override
@@ -39,4 +39,15 @@ public class OpVoicePlugin extends Plugin {
 		}
 	}
 
+	@Override
+	public void onOp(Channel channel, User source, String recipient) {
+		// Give op to everyone when this bot gets op
+		if (recipient.equals(channel.getBot().getNick())) {
+			for (org.jibble.pircbot.User u : channel.getUsers()) {
+				User user = channel.getBot().getUserByNickname(u.getNick());
+				if (user != null && !channel.isOp(user))
+					channel.op(user);
+			}
+		}
+	}
 }

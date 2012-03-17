@@ -136,7 +136,7 @@ public class CommandMessage extends Message {
 						matchedWord += c;
 					matchedWord += n;
 					i++; // skip an extra letter
-
+					
 					// Not an escape character
 				} else {
 					matchedWord += c;
@@ -216,8 +216,7 @@ public class CommandMessage extends Message {
 					matchedWord += c;
 
 				if (matchedWord.length() > 0) {
-					if (!firstWordInCommand
-							&& matchedWord.startsWith(Command.PREFIX)) {
+					if (!firstWordInCommand && matchedWord.startsWith(Command.PREFIX)) {
 						if (level > 0) {
 							parent.addMessage(new CommandMessage(parent, matchedWord));
 						} else {

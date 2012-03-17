@@ -55,6 +55,11 @@ public abstract class IOCommand extends Command {
 	 *            The sent message. May not be null.
 	 * @return True if the given message should be parsed by this command
 	 */
-	public abstract boolean isHandled(Channel channel, User user, CommandMessage msg);
+	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
+		for (String c : this.supportedCommands())
+			if (msg.isCommand(c))
+				return true;
+		return false;
+	}
 
 }

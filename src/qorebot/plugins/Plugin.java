@@ -3,6 +3,7 @@ package qorebot.plugins;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import qorebot.Channel;
@@ -104,6 +105,49 @@ public abstract class Plugin {
 	}
 
 	/**
+	 * Permanently installs the plugin to a Pluginable object.
+	 * 
+	 * @param pluginable
+	 *            The object to which to install the plugin, either a user or a
+	 *            channel.
+	 */
+	public void add(Pluginable pluginable) {
+		// Get the SQL query straight
+		PreparedStatement st = null;
+		int id = 0;
+		if (pluginable instanceof Channel) {
+			st = Database.gps("INSERT INTO plugins_channels(plugin_id, channel_id) VALUES(?,?)");
+			id = ((Channel) pluginable).getId();
+		} else if (pluginable instanceof User) {
+			st = Database.gps("INSERT INTO plugins_users(plugin_id, user_id) VALUES(?,?)");
+			id = ((User) pluginable).getId();
+		}
+		
+		if (st == null)
+			return;
+		
+		// Insert into the database
+		try {
+			st.setInt(1, this.getId());
+			st.setInt(2, id);
+			st.executeUpdate();
+			
+		} catch (SQLException ex) {
+			Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
+					"Failed to add the plugin", ex);
+		} finally {
+			try {
+				if (st != null)
+					st.close();
+			} catch (SQLException ex1) {
+			}
+		}
+		
+		// Add to the object
+		pluginable.register(this);
+	}
+
+	/**
 	 * Installs the Plugin with the given name into the bot.
 	 * 
 	 * @param bot
@@ -128,7 +172,7 @@ public abstract class Plugin {
 		}
 		
 		// Insert the plugin to the plugins table
-		PreparedStatement st = Database.gps("INSERT INTO plugins(name, autoregister_channels, autoregister_users) VALUES(?,?,?)");
+		PreparedStatement st = Database.gps("INSERT INTO plugins(name, autoregister_channels, autoregister_users) VALUES(?,?,?)", Statement.RETURN_GENERATED_KEYS);
 		if (st == null)
 			return false;
 		
@@ -143,7 +187,7 @@ public abstract class Plugin {
 			
 			keys = st.getGeneratedKeys();
 			keys.next();
-			id = keys.getInt(0);
+			id = keys.getInt(1);
 		} catch (SQLException ex) {
 			Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
 					"Failed to install the plugin", ex);

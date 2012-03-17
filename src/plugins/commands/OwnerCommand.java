@@ -23,8 +23,8 @@ import qorebot.plugins.commands.message.CommandMessage;
 public class OwnerCommand extends ThreadedCommand {
 
 	@Override
-	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
-		return msg.isCommand("shutdown") || msg.isCommand("raw");
+	public List<String> supportedCommands() {
+		return Command.createList("shutdown", "raw");
 	}
 
 	@Override

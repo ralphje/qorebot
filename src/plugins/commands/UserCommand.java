@@ -18,8 +18,8 @@ import qorebot.plugins.commands.message.CommandMessage;
 public class UserCommand extends ThreadedCommand {
 
 	@Override
-	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
-		return msg.isCommand("user");
+	public List<String> supportedCommands() {
+		return Command.createList("user");
 	}
 
 	@Override

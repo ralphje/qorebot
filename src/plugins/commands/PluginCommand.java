@@ -23,6 +23,7 @@ import qorebot.plugins.commands.message.CommandMessage;
  * The available commands are:
  * 
  * !plugins              Shows all loaded plugins 
+ * !plugin install [plugin] [autoC] [autoU]  Installs a plugin (owner only)
  * !plugin load [plugin] Temporarily loads one  plugin 
  * !plugin add [plugin]  Permanently adds a plugin 
  * !plugin reload        Reloads all plugins
@@ -32,8 +33,16 @@ import qorebot.plugins.commands.message.CommandMessage;
 public class PluginCommand extends ThreadedCommand {
 
 	@Override
-	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
-		return msg.isCommand("plugin");
+	public List<String> supportedCommands() {
+		return Command.createList("plugin");
+	}
+
+	@Override
+	public List<String> listedCommands(Channel channel, User user) {
+		if (user.hasLevel(UserLevel.ADMINISTRATOR, channel))
+			return Command.createList("plugin");
+		else
+			return Command.createList();
 	}
 	
 	@Override
@@ -50,6 +59,22 @@ public class PluginCommand extends ThreadedCommand {
 				 * Shows all loaded plugins.
 				 */
 				listPlugins(channel, user);
+
+			} else if (arguments.get(1).toLowerCase().equals("install")) {
+				/*
+				 * Command: !plugin install <plugin> <autoloadC> <autoloadU> 
+				 * Installs a plugin into the database.
+				 */
+				if (!Command.checkPermissions("installing plugins", UserLevel.OWNER, channel, user))
+					return null;
+				
+				if (arguments.size() < 5) { // Only !plugin load is passed
+					Command.sendErrorMessage(channel, user, "Invalid command. Use '!help plugin' for more information.");
+				} else { // Argument is passed
+					this.installPlugin(channel, user, arguments.get(2), 
+							Command.stringToBool(arguments.get(3)),
+							Command.stringToBool(arguments.get(4)));
+				}
 				
 			} else if (arguments.get(1).toLowerCase().equals("load")) {
 				/*
@@ -62,6 +87,18 @@ public class PluginCommand extends ThreadedCommand {
 				} else { // Argument is passed
 					this.loadPlugin(channel, user,arguments.get(2));
 				}
+				
+			} else if (arguments.get(1).toLowerCase().equals("unload")) {
+				/*
+				 * Command: !plugin load <plugin> 
+				 * Loads the plugin temporarily for the current user or channel
+				 */
+				
+				if (arguments.size() == 2) { // Only !plugin load is passed
+					Command.sendErrorMessage(channel, user, "Invalid command. Use '!help plugin' for more information.");
+				} else { // Argument is passed
+					this.unloadPlugin(channel, user,arguments.get(2));
+				}
 
 			} else if (arguments.get(1).toLowerCase().equals("add")) {
 				/*
@@ -73,8 +110,7 @@ public class PluginCommand extends ThreadedCommand {
 					Command.sendErrorMessage(channel, user, "Invalid command. Use '!help plugin' for more information.");
 					
 				} else {
-					// TODO: Implement
-					Command.sendErrorMessage(channel, user,  "Not implemented yet.");
+					this.addPlugin(channel, user,arguments.get(2));
 				}
 
 			} else if (arguments.get(1).toLowerCase().equals("reload")) {
@@ -115,25 +151,85 @@ public class PluginCommand extends ThreadedCommand {
 			channel.sendMessage(r);
 		}
 	}
-	
+
 	/**
-	 * Loads the plugin for the given channel/user
+	 * Installs the plugin
 	 */
-	private void loadPlugin(Channel channel, User user, String plugin) {
+	private void installPlugin(Channel channel, User user, String plugin, boolean autoregisterChannels, boolean autoregisterUsers) {
 		// Get plugin
 		Plugin p = user.getBot().createPlugin(plugin);
 
 		// Check if the plugin is loaded
 		if (p == null) {
-			Command.sendErrorMessage(channel, user, "Loading plugin failed.");
+			Command.sendErrorMessage(channel, user, "Plugin could not be found.");
 
 		} else {
 			// Loads the plugin
-			p.init(user.getBot(), -1, plugin, false, false);
+			if (Plugin.install(user.getBot(), plugin, autoregisterChannels, autoregisterUsers)) {
+				if (autoregisterChannels && autoregisterUsers) {
+					Command.sendMessage(channel, user, "Plugin was successfully installed and loaded for every channel and user.");
+				} else if (autoregisterChannels) {
+					Command.sendMessage(channel, user, "Plugin was successfully installed and loaded for every channel.");
+				} else if (autoregisterUsers) {
+					Command.sendMessage(channel, user, "Plugin was successfully installed and loaded for every user.");
+				} else {
+					Command.sendMessage(channel, user, "Plugin was successfully installed. Use 'load' or 'add' to load the plugin.");
+				}
+			} else {
+				Command.sendErrorMessage(channel, user, "Plugin installation failed. Maybe the plugin was already installed.");
+			}
+		}
+	}
+	
+	/**
+	 * Loads the plugin for the given channel/user
+	 */
+	private void loadPlugin(Channel channel, User user, String plugin) {
+		// Find the plugin instance in the Bot
+		Plugin p = user.getBot().getPlugin(plugin);
+		if (p == null) {
+			Command.sendErrorMessage(channel, user, "Plugin is unknown. Have you already installed it?");
+			
+		} else {
+			// Loads the plugin
 			Pluginable pl = (channel == null ? user : channel);
 			pl.register(p);
 			Command.sendMessage(channel, user,
 					"Plugin loaded. For permanent use, please use 'add'");
+		}
+	}
+	
+	/**
+	 * Unloads the plugin for the given channel/user
+	 */
+	private void unloadPlugin(Channel channel, User user, String plugin) {
+		// Find the plugin instance in the Bot
+		Plugin p = user.getBot().getPlugin(plugin);
+		if (p == null) {
+			Command.sendErrorMessage(channel, user, "Plugin is unknown, so it isn't loaded.");
+			
+		} else {
+			// Loads the plugin
+			Pluginable pl = (channel == null ? user : channel);
+			pl.unregister(p);
+			Command.sendMessage(channel, user, "Plugin unloaded.");
+		}
+	}
+
+	/**
+	 * Loads the plugin for the given channel/user
+	 */
+	private void addPlugin(Channel channel, User user, String plugin) {
+		// Find the plugin instance in the Bot
+		Plugin p = user.getBot().getPlugin(plugin);
+		if (p == null) {
+			Command.sendErrorMessage(channel, user, "Plugin is unknown. Have you already installed it?");
+			
+		} else {
+			// Loads the plugin
+			Pluginable pl = (channel == null ? user : channel);
+			p.add(pl);
+			Command.sendMessage(channel, user, "Plugin added successfully.");
 		}
 	}
 	
@@ -164,7 +260,7 @@ public class PluginCommand extends ThreadedCommand {
 									+ e.getMessage());
 				}
 
-				Command.sendMessage(c, u, "All plugins are reloaded (except those added by !plugin load)");
+				Command.sendMessage(c, u, "All plugins are reloaded");
 			}
 		}).start();
 	}

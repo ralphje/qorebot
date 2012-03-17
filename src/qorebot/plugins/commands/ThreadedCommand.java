@@ -16,7 +16,9 @@ import qorebot.plugins.commands.message.ExtendedMessage;
  * 
  * Since the command is executed in a seperate thread, it's by design not
  * possible to return the result to any calling command. Therefore, an
- * implementing class should send any messages by itself.
+ * implementing class should send any messages by itself. This command should
+ * furthermore only be used in cases where it is not desired for messages to be
+ * used in another command. This holds mostly true for management commands.
  * 
  * @author Ralph Broenink
  */
@@ -75,5 +77,10 @@ public abstract class ThreadedCommand extends Command implements Runnable {
 	 *            The sent message. May not be null.
 	 * @return True if the given message should be parsed by this command
 	 */
-	public abstract boolean isHandled(Channel channel, User user, CommandMessage msg);
+	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
+		for (String c : this.supportedCommands())
+			if (msg.isCommand(c))
+				return true;
+		return false;
+	}
 }

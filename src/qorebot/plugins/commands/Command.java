@@ -3,6 +3,7 @@ package qorebot.plugins.commands;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +14,7 @@ import org.jibble.pircbot.Colors;
 
 import qorebot.*;
 import qorebot.plugins.Plugin;
+import qorebot.plugins.Pluginable;
 import qorebot.plugins.commands.message.CommandMessage;
 import qorebot.plugins.commands.message.Message;
 import qorebot.plugins.commands.message.StringMessage;
@@ -111,17 +113,70 @@ public abstract class Command {
 	
 
 	/**
-	 * Installs the Plugin with the given name into the bot.
+	 * Permanently installs the command to a Pluginable object.
 	 * 
-	 * @param bot
-	 *            The bot in which we should install the plugin
+	 * @param plugin
+	 *            The plugin to which we should install.
+	 * @param pluginable
+	 *            The object to which to install the command, either a user or a
+	 *            channel.
+	 */
+	public void add(Plugin plugin, Pluginable pluginable) {
+		// Get the SQL query straight
+		PreparedStatement st = null;
+		int id = 0;
+		if (pluginable instanceof Channel) {
+			st = Database.gps("INSERT INTO commands_channels(plugin_id, channel_id) VALUES(?,?)");
+			id = ((Channel) pluginable).getId();
+		} else if (pluginable instanceof User) {
+			st = Database.gps("INSERT INTO commands_users(plugin_id, user_id) VALUES(?,?)");
+			id = ((User) pluginable).getId();
+		}
+		
+		if (st == null)
+			return;
+		
+		// Insert into the database
+		try {
+			st.setInt(1, this.getId());
+			st.setInt(2, id);
+			st.executeUpdate();
+			
+		} catch (SQLException ex) {
+			Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
+					"Failed to add the command", ex);
+		} finally {
+			try {
+				if (st != null)
+					st.close();
+			} catch (SQLException ex1) {
+			}
+		}
+		// Add to the object
+		try {
+			plugin.getClass()
+				.getMethod("register", Command.class, pluginable.getClass())
+				.invoke(this, pluginable);
+		} catch (IllegalAccessException | IllegalArgumentException
+				| InvocationTargetException | NoSuchMethodException
+				| SecurityException e) {
+			Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
+					"Failed to add the command", e);
+		}
+	}
+
+	/**
+	 * Installs the Command with the given name into the bot.
+	 * 
+	 * @param plugin
+	 *            The CommandPlugin that owns the command.
 	 * @param name
-	 *            The name of the plugin to install.
+	 *            The name of the command to install.
 	 * @param autoregisterChannels
-	 *            True if the plugin should be registered automatically to every
+	 *            True if the command should be registered automatically to every
 	 *            channel.
 	 * @param autoregisterUsers
-	 *            True if the plugin should be registered automatically to every
+	 *            True if the command should be registered automatically to every
 	 *            user.
 	 * @return True iff the installation succeeded.
 	 */
@@ -131,12 +186,12 @@ public abstract class Command {
 			Command command = (Command) plugin.getClass().getMethod("createCommand", String.class).invoke(plugin, name);
 			if (command == null) {
 				Logger.getLogger(Plugin.class.getName()).log(Level.SEVERE,
-						"Could not load and thus not install the plugin " + name);
+						"Could not load and thus not install the command " + name);
 				return false;
 			}
 			
 			// Insert the plugin to the plugins table
-			PreparedStatement st = Database.gps("INSERT INTO commands(name, autoregister_channels, autoregister_users) VALUES(?,?,?)");
+			PreparedStatement st = Database.gps("INSERT INTO commands(name, autoregister_channels, autoregister_users) VALUES(?,?,?)", Statement.RETURN_GENERATED_KEYS);
 			if (st == null)
 				return false;
 			
@@ -151,10 +206,10 @@ public abstract class Command {
 				
 				keys = st.getGeneratedKeys();
 				keys.next();
-				id = keys.getInt(0);
+				id = keys.getInt(1);
 			} catch (SQLException ex) {
 				Logger.getLogger(Command.class.getName()).log(Level.SEVERE,
-						"Failed to install the plugin", ex);
+						"Failed to install the command", ex);
 				return false;
 			} finally {
 				try {
@@ -176,7 +231,7 @@ public abstract class Command {
 			plugin.getClass()
 					.getMethod("initCommand", Command.class, int.class,
 							String.class, boolean.class, boolean.class)
-					.invoke(command, id, name, autoregisterChannels,
+					.invoke(plugin, command, id, name, autoregisterChannels,
 							autoregisterUsers);
 			
 		} catch (IllegalAccessException | IllegalArgumentException
@@ -255,7 +310,8 @@ public abstract class Command {
 	}
 
 	/**
-	 * Receives a message via a channel. Should not be overriden by any command.
+	 * Receives a message via a channel. Should not be overriden by any command,
+	 * but may be overwritten by a Command superclass.
 	 * 
 	 * @param channel
 	 *            The channel the message was sent to
@@ -281,7 +337,21 @@ public abstract class Command {
 	 */
 	public abstract String handleMessage(Channel channel, User user, CommandMessage msg);
 	
-
+	/**
+	 * Retrieves the list of commands that are supported by this handler.
+	 */
+	public abstract List<String> supportedCommands();
+	
+	/**
+	 * Retrieves the list of commands that are supported by this handler and 
+	 * that should be displayed in the list of all commands. Defaults to the
+	 * list of supported commands.
+	 */
+	public List<String> listedCommands(Channel channel, User user) {
+		return this.supportedCommands();
+	}
+	
+	
 	// -------------------------------------------------------------------------
 	// Argument parsing
 	// -------------------------------------------------------------------------
@@ -386,6 +456,20 @@ public abstract class Command {
 	// -------------------------------------------------------------------------
 
 	/**
+	 * Creates a list from the arguments that are passed to this function.
+	 * 
+	 * @param strings
+	 * 			  The strings that are needed to be added to the list.
+	 * @return A list of the strings that are passed to the function.
+	 */
+	public static List<String> createList(String ... strings) {
+		ArrayList<String> result = new ArrayList<String>();
+		for (String s : strings)
+			result.add(s);
+		return result;
+	}
+	
+	/**
 	 * Checks whether the given command is in the input.
 	 * 
 	 * @param command
@@ -397,6 +481,19 @@ public abstract class Command {
 	 */
 	public static boolean isCommand(String input, String command) {
 		return input.equals(command) || input.equals(Command.PREFIX + command);
+	}
+
+	/**
+	 * Converts a string to a boolean.
+	 * 
+	 * @param input
+	 *            The string to convert
+	 * @return True iff the input equals '1' or 'true' or 'yes'
+	 *         (case-insensitve).
+	 */
+	public static boolean stringToBool(String input) {
+		return input.equals("1") || input.toLowerCase().equals("true")
+				|| input.toLowerCase().equals("yes");
 	}
 	
 	/**

@@ -8,7 +8,6 @@ import qorebot.Channel;
 import qorebot.User;
 import qorebot.plugins.commands.Command;
 import qorebot.plugins.commands.IOCommand;
-import qorebot.plugins.commands.message.CommandMessage;
 
 /**
  * A really simple example of a command; when !time is received, the time is
@@ -20,8 +19,8 @@ import qorebot.plugins.commands.message.CommandMessage;
 public class TimeCommand extends IOCommand {
 
 	@Override
-	public boolean isHandled(Channel channel, User user, CommandMessage msg) {
-		return msg.isCommand("time");
+	public List<String> supportedCommands() {
+		return Command.createList("time");
 	}
 
 	@Override

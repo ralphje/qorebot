@@ -437,6 +437,32 @@ public class CommandPlugin extends Plugin {
 	}
 
 	/**
+	 * Unregisters a command from a user
+	 * 
+	 * @param command
+	 *            The command to unregister
+	 * @param user
+	 *            The user to unregister from
+	 */
+	public void unregister(Command command, User user) {
+		for (User u : this.users.keySet())
+			this.users.get(u).remove(command);
+	}
+	
+	/**
+	 * Unregisters a command from a channel
+	 * 
+	 * @param command
+	 *            The command to unregister
+	 * @param channel
+	 * 			  The channel to unregister from
+	 */
+	public void unregister(Command command, Channel channel) {
+		for (Channel c : this.channels.keySet())
+			this.channels.get(c).remove(command);
+	}
+	
+	/**
 	 * Unregisters a command from this object
 	 * 
 	 * @param command
@@ -451,6 +477,22 @@ public class CommandPlugin extends Plugin {
 			this.channels.get(c).remove(command);
 	}
 
+
+	/**
+	 * Retrieves the Command for a given command name. Returns null if not found
+	 * 
+	 * @param command
+	 *            The command name
+	 */
+	public Command getCommand(String command) {
+		for (Command c : this.commands)
+			if (c.getName().equals(command))
+				return c;
+		Logger.getLogger(Database.class.getName()).log(Level.FINE,
+				"Could not find command ''{0}''.", command);
+		return null;
+	}
+	
 	/**
 	 * Retrieves the current set of commands
 	 */
