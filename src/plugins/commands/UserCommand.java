@@ -45,6 +45,8 @@ public class UserCommand extends ThreadedCommand {
 			String nickname = null;
 
 			if (affectedUser == null) {
+				// Try to get some whois for the next time.
+				user.getBot().whois(arguments.get(1));
 				if (arguments.get(1).startsWith("~")) {
 					// If the username starts with a '~', we are managing by username
 					// This allows management by 
@@ -53,6 +55,7 @@ public class UserCommand extends ThreadedCommand {
 						affectedUser = this.getUserByNickname(nickname); // we know  this isn't nice
 						if (!affectedUser.isIdentified()) {
 							Command.sendErrorMessage(channel, user, "This username could not be found.", true);
+							return null;
 						} else {
 							Command.sendMessage(channel, user, "You are editing an user by its username. This method is not recommended.", true);
 							
@@ -67,6 +70,7 @@ public class UserCommand extends ThreadedCommand {
 									+ "user is at least not identified (yet), although implicit "
 									+ "identification can occur when he/she does something. "
 									+ "You could try using '~<username>' (deprecated).", true);
+					return null;
 				}
 			} else {
 				nickname = affectedUser.getNickname();

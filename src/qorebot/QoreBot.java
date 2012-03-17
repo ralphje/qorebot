@@ -10,6 +10,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.jibble.pircbot.DccChat;
@@ -557,6 +558,15 @@ public class QoreBot extends PircBot {
 
 	@Override
 	protected void onServerResponse(int code, String response) {
+		// Whois reply handler
+		if (code == QoreBot.RPL_WHOISUSER) {
+			StringTokenizer tokenizer = new StringTokenizer(response);
+			tokenizer.nextToken(); // not interesting info (we get our Nick back)
+			String nick = tokenizer.nextToken();
+			String login = tokenizer.nextToken();
+			String hostname = tokenizer.nextToken();
+			this.onWhoisUser(nick, login, hostname);
+		}
 	}
 
 	@Override
@@ -832,6 +842,11 @@ public class QoreBot extends PircBot {
 	protected void onUserList(String channel, org.jibble.pircbot.User[] users) {
 		Channel c = this.getChannel(channel);
 		c.receive(new Event(EventType.CHANNEL_ONUSERLIST, c, users));
+		// Perform a WHOIS on every user we don't know yet
+		for (org.jibble.pircbot.User u : users) {
+			if (this.getUserByNickname(u.getNick()) == null)
+					this.whois(u.getNick());
+		}
 	}
 
 	@Override
@@ -840,4 +855,28 @@ public class QoreBot extends PircBot {
 		User source = this.getUser(sourceNick, sourceLogin, sourceHostname);
 		c.receive(new Event(EventType.CHANNEL_ONVOICE, c, source, recipient));
 	}
+	
+	// -------------------------------------------------------------------------
+	// Extra methods
+	// -------------------------------------------------------------------------
+	/**
+     * Requests WHOIS information from the server.
+     * 
+     * @param nick    The nick of the user to whois.
+     */
+    public final void whois(String nick) {
+        this.sendRawLine("WHOIS " +  nick);
+    }
+    
+    /**
+     * Receive information about a whois request. Is used to create users when
+     * this is required.
+     * 
+     * @param nick The nickname of the user
+     * @param login The login name of the user
+     * @param hostname The hostname of the user
+     */
+    protected void onWhoisUser(String nick, String login, String hostname) {
+    	this.getUser(nick, login, hostname);
+    }
 }
