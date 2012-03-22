@@ -1,7 +1,3 @@
-# Libs imporperly stored, this works for now
-/lib/*
-
-# Some other files
 *.log
 *.log.*
 *.lck
@@ -42,6 +38,6 @@ local.properties
 *.class
 
 # Package Files #
-*.jar
+#*.jar - included for lib files
 *.war
 *.ear
